@@ -46,6 +46,22 @@ void print_tensor(ggml_tensor* tensor, const char* name = "", int verbosity = 0)
                 }
                 printf("\n");
             }
+            else if (dim0 < 6 && dim1 > 6){
+                for (int i = 0; i < dim0; i++)
+                {
+                    for (int j = 0; j < 3; j++)
+                    {
+                        printf("%+.4f ", mat[i * dim1 + j]);
+                    }
+                    printf("... ");
+                    for (int j = dim1 - 3; j < dim1; j++)
+                    {
+                        printf("%+.4f ", mat[i * dim1 + j]);
+                    }
+                    printf("\n");
+                }
+                printf("\n");
+            }
             else
             {
                 for (int i = 0; i < std::min(dim0, 3); i++)
@@ -200,7 +216,31 @@ bool load_tensor_from_file(const char* filename, tensor_from_gguf& tensor)
 
 int main(){
     tensor_from_gguf tensor;
-    std::string      filename = "../examples/xgenmm/imgs/4patches_embeddings.gguf";
+
+    // /*
+    // hardcoded values
+    // */
+    // std::string      filename = "../examples/xgenmm/imgs/4patches_embeddings.gguf";
+    // int     original_width = 955;
+    // int     original_height = 289;
+    // int     num_images = 4;  // 3 patches + 1 base
+    // int32_t num_patches_per_side = 384 / 14;
+    // int     num_patches_width = 3;   // grid_shape.first
+    // int     num_patches_height = 1;  // grid_shape.second
+
+    /*
+    hardcoded values
+    */
+    std::string      filename = "../examples/xgenmm/imgs/5patches_embeddings.gguf";
+    int     original_width = 604;
+    int     original_height = 768;
+    int     num_images = 5;  // 2*2 patches + 1 base
+    int32_t num_patches_per_side = 384 / 14;
+    int     num_patches_width = 2;   // grid_shape.first
+    int     num_patches_height = 2;  // grid_shape.second
+
+
+
     bool is_successful = load_tensor_from_file(filename.c_str(), tensor);
     if (!is_successful)
     {
@@ -211,15 +251,7 @@ int main(){
     ggml_tensor* patch_embeds = tensor.data;
     // print_tensor(patch_embeds, "patch_embeds", 1);
 
-    /*
-        hardcoded values
-    */
-    int original_width = 955;
-    int original_height = 289;
-    int num_images = 4;  // 3 patches + 1 base
-    int32_t num_patches_per_side = 384 / 14;
-    int num_patches_width = 3; //grid_shape.first
-    int num_patches_height = 1; // grid_shape.second
+
 
 
 
@@ -337,7 +369,8 @@ int main(){
 
     {
         ctx_size +=
-            num_patches_per_side * num_patches_width * num_patches_per_side * num_patches_height * sizeof(float) * 2;
+            num_patches_per_side * num_patches_width * num_patches_per_side * num_patches_height * sizeof(float) * 4;
+        ctx_size += 1024 * 1024 * ggml_type_size(GGML_TYPE_F32);
     }
 
     params = 
@@ -358,39 +391,60 @@ int main(){
 
     float scale_factor = 1.0;
     struct ggml_tensor* attention_mask = ggml_new_tensor_2d(mask.ctx, GGML_TYPE_F32, current_width, current_height);
+    float* attention_mask_data = (float*)attention_mask->data;
     if (original_aspect_ratio > current_aspect_ratio){
         scale_factor = (float)current_width / (float)original_width;
         int new_height = int(original_height * scale_factor);
         int padding = (current_height - new_height) / 2;
-        // printf("new_height: %d, padding: %d\n", new_height, padding);
-        float* attention_mask_data = (float*)attention_mask->data;
+        printf("new_height: %d, padding: %d\n", new_height, padding);
+        
         for (int i = 0; i < current_height; i++){
             for (int j = 0; j < current_width; j++){
-                if (i < padding || i > padding + new_height){
+                if (i < padding || i >= current_height - padding)
+                {
                     attention_mask_data[i * current_width + j] = 0.0;
-                } else {
+                }
+                else
+                {
                     attention_mask_data[i * current_width + j] = 1.0;
                 }
             }
         }
     }else{
-        scale_factor = current_height / original_height;
+        scale_factor = (float)current_height / (float)original_height;
         int new_width = int(original_width * scale_factor);
         int padding = (current_width - new_width) / 2;
-        float* attention_mask_data = (float*)attention_mask->data;
+        printf("new_width: %d, padding: %d\n", new_width, padding);
         for (int i = 0; i < current_height; i++){
             for (int j = 0; j < current_width; j++){
-                if (j < padding || j > padding + new_width){
+                if (j < padding || j >= current_width - padding)
+                {
                     attention_mask_data[i * current_width + j] = 0.0;
-                } else {
+                }
+                else
+                {
                     attention_mask_data[i * current_width + j] = 1.0;
                 }
             }
         }
     }
+    // print_tensor(attention_mask, "attention_mask", 1);
+    // tensor_to_csv(attention_mask, "/export/home/llama.cpp/examples/xgenmm/imgs/attention_mask_5patches_stage1.csv");
 
+    attention_mask = ggml_reshape_2d(mask.ctx, attention_mask, num_patches_per_side * num_patches_per_side, num_patches_width * num_patches_height);
+    attention_mask = ggml_cont(mask.ctx, attention_mask);
+    struct ggml_tensor* all_one_tensor =
+        ggml_new_tensor_2d(mask.ctx, GGML_TYPE_F32, num_patches_per_side * num_patches_per_side, 1);
+    std::fill_n((float*)all_one_tensor->data, num_patches_per_side * num_patches_per_side, 1.0);
+    attention_mask = ggml_concat(mask.ctx, all_one_tensor, attention_mask, 1);
+    
+    gf = ggml_new_graph(mask.ctx);
+    ggml_build_forward_expand(gf, attention_mask);
+    ggml_graph_compute_with_ctx(mask.ctx, gf, 1);
+    attention_mask = gf->nodes[gf->n_nodes - 1];
     print_tensor(attention_mask, "attention_mask", 1);
-    tensor_to_csv(attention_mask, "/export/home/llama.cpp/examples/xgenmm/imgs/attention_mask_4patchhes.csv");
+    // tensor_to_csv(attention_mask, "/export/home/llama.cpp/examples/xgenmm/imgs/attention_mask_4patches.csv");
+    tensor_to_csv(attention_mask, "/export/home/llama.cpp/examples/xgenmm/imgs/attention_mask_5patches.csv");
     ggml_free(model.ctx);
     ggml_free(mask.ctx);
     ggml_free(tensor.ctx);

@@ -19,10 +19,9 @@ import gguf
 import numpy as np
 import torch
 
-patches_embeddings = torch.load('./imgs/4patches_embeddings.pt').numpy()
-print(f'4patches_embeddings:{patches_embeddings.shape}\n')
-print(patches_embeddings[1:,:,:])
-
+# patches_embeddings = torch.load('./imgs/4patches_embeddings.pt').numpy()
+# print(f'4patches_embeddings:{patches_embeddings.shape}\n')
+# print(patches_embeddings[1:,:,:])
 
 # gguf_writer = gguf.GGUFWriter(path='./imgs/4patches_embeddings.gguf', arch='4patches_embeddings')
 # gguf_writer.add_tensor("data", patches_embeddings)
@@ -30,3 +29,16 @@ print(patches_embeddings[1:,:,:])
 # gguf_writer.write_kv_data_to_file()
 # gguf_writer.write_tensors_to_file()
 # gguf_writer.close()
+
+
+
+patches_embeddings = torch.load('./imgs/5patches_embeddings.pt').numpy()
+print(f'5patches_embeddings:{patches_embeddings.shape}\n')
+print(patches_embeddings[1:,:,:])
+
+gguf_writer = gguf.GGUFWriter(path='./imgs/5patches_embeddings.gguf', arch='5patches_embeddings')
+gguf_writer.add_tensor("data", patches_embeddings)
+gguf_writer.write_header_to_file()
+gguf_writer.write_kv_data_to_file()
+gguf_writer.write_tensors_to_file()
+gguf_writer.close()
