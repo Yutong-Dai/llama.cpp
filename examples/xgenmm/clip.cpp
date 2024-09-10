@@ -1119,9 +1119,8 @@ static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image
         embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_ln_w), model.pre_ln_b);
     }
     // loop over layers
-    if (ctx->has_minicpmv_projector) {
-        n_layer += 1;
-    }
+    n_layer += 1;
+    
     for (int il = 0; il < n_layer - 1; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
 
