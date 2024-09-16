@@ -14,6 +14,165 @@
 #include "llama.h"
 #include "xgenmm.h"
 
+
+struct tensor_from_gguf
+{
+    struct ggml_tensor  *data;
+    struct ggml_context *ctx;
+};
+
+
+void print_tensor(ggml_tensor *tensor, const char *name = "", int verbosity = 0)
+{
+    if (tensor->ne[2] == 1)
+    {
+        printf("---> %s: (%ld, %ld)\n", name, tensor->ne[0], tensor->ne[1]);
+    }
+    else if (ggml_is_3d(tensor))
+    {
+        printf("---> %s: (%ld, %ld, %ld)\n", name, tensor->ne[0], tensor->ne[1], tensor->ne[2]);
+    }
+    else
+    {
+        printf("---> %s: (%ld, %ld, %ld, %ld)\n", name, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+    }
+    if (verbosity == 1)
+    {
+        printf("*********************************************************************\n");
+        if (tensor->ne[2] == 1)
+        {
+            const float *mat = (float *)tensor->data;
+            int          dim0 = tensor->ne[1];
+            int          dim1 = tensor->ne[0];
+            if (dim0 < 6 && dim1 < 6)
+            {
+                for (int i = 0; i < dim0; i++)
+                {
+                    for (int j = 0; j < dim1; j++)
+                    {
+                        printf("%+.4f ", mat[i * dim1 + j]);
+                    }
+                    printf("\n");
+                }
+                printf("\n");
+            }
+            else
+            {
+                for (int i = 0; i < std::min(dim0, 3); i++)
+                {
+                    for (int j = 0; j < std::min(dim1, 3); j++)
+                    {
+                        printf("%+.6f ", mat[i * dim1 + j]);
+                    }
+                    printf("... ");
+                    for (int j = dim1 - 3; j < dim1; j++)
+                    {
+                        printf("%+.6f ", mat[i * dim1 + j]);
+                    }
+                    printf("\n");
+                }
+                if (dim0 > 3)
+                {
+                    printf("...................... omit ......................\n");
+                    for (int i = dim0 - 3; i < dim0; i++)
+                    {
+                        for (int j = 0; j < std::min(dim1, 3); j++)
+                        {
+                            printf("%+.6f ", mat[i * dim1 + j]);
+                        }
+                        printf("... ");
+                        for (int j = dim1 - 3; j < dim1; j++)
+                        {
+                            printf("%+.6f ", mat[i * dim1 + j]);
+                        }
+                        printf("\n");
+                    }
+                }
+            }
+        }
+        else if (ggml_is_3d(tensor))
+        {
+            const float *data = (float *)tensor->data;
+            int          dim0 = tensor->ne[2];
+            int          dim1 = tensor->ne[1];
+            int          dim2 = tensor->ne[0];
+            if (dim0 < 6 && dim1 < 6 && dim2 < 6)
+            {
+                for (int i = 0; i < dim0; i++)
+                {
+                    printf("dim0 = %d\n", i);
+                    for (int j = 0; j < dim1; j++)
+                    {
+                        for (int k = 0; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("\n");
+                }
+                printf("\n");
+            }
+            else
+            {
+                for (int i = 0; i < std::min(dim0, 3); i++)
+                {
+                    printf("dim0 = %d\n", i);
+                    for (int j = 0; j < std::min(dim1, 3); j++)
+                    {
+                        for (int k = 0; k < std::min(dim2, 3); k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("... ");
+                        for (int k = dim2 - 3; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("........................\n");
+                    for (int j = dim1 - 3; j < dim1; j++)
+                    {
+                        for (int k = 0; k < std::min(dim2, 3); k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("... ");
+                        for (int k = dim2 - 3; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("---------------------------------------------------\n");
+                }
+                printf("\n");
+            }
+        }
+    }
+    printf("*********************************************************************\n");
+    printf("\n");
+}
+
+
+bool load_tensor_from_file(const char *filename, tensor_from_gguf &tensor)
+{
+    struct gguf_init_params params = {
+        /*.no_alloc   =*/false,
+        /*.ctx        =*/&tensor.ctx,
+    };
+    gguf_context *ctx = gguf_init_from_file(filename, params);
+    if (!ctx)
+    {
+        fprintf(stderr, "%s: gguf_init_from_file() failed\n", __func__);
+        return false;
+    }
+    tensor.data = ggml_get_tensor(tensor.ctx, "data");
+
+    return true;
+}
+
 // RGB uint8 image
 struct clip_image_u8
 {
@@ -278,32 +437,21 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image
     int dim0 = num_images - 1;
     int dim1 = num_patches_per_side * num_patches_per_side;
     int dim2 = hidden_size;
+
     float* image_features_data = (float*)image_features->data;
     float* base_image_feature_data = (float*)base_image_feature->data;
 
     for (int i=0; i < dim0; i++)
-    {   
-        if (i==0)
+    {
+        for (int j=0; j < dim1; j++)
         {
-            // base_image_feature_data
-            float* image_embd = image_embd_v[i];
-            for (int j=0; j < dim1; j++)
+            for (int k=0; k < dim2; k++)
             {
-                for (int k=0; k < dim2; k++)
+                image_features_data[i * dim1 * dim2 + j * dim2 + k] =
+                    image_embd_v[i+1][j * dim2 + k];
+                if (i == 0)
                 {
-                    base_image_feature_data[j * dim2 + k] = image_embd[j * dim2 + k];
-                }
-            }
-        }
-        else
-        {
-            // other sub-images
-            float* image_embd = image_embd_v[i+1];
-            for (int j=0; j < dim1; j++)
-            {
-                for (int k=0; k < dim2; k++)
-                {
-                    image_features_data[i * dim1 * dim2 + j * dim2 + k] = image_embd[j * dim2 + k];
+                    base_image_feature_data[j * dim2 + k] = image_embd_v[i][j * dim2 + k];
                 }
             }
         }
@@ -324,17 +472,37 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image
                      num_patches_height * num_patches_width * num_patches_per_side * num_patches_per_side,
                      size_ele * hidden_size, 0);
     
-        struct ggml_tensor* tensor_3d =
-        ggml_reshape_3d(model.ctx, flatten,
-                        hidden_size,                                        
-                        num_patches_per_side * num_patches_per_side, 
-                        num_patches_width * num_patches_height);
+    struct ggml_tensor* tensor_3d =
+    ggml_reshape_3d(model.ctx, flatten,
+                    hidden_size,                                        
+                    num_patches_per_side * num_patches_per_side, 
+                    num_patches_width * num_patches_height);
     tensor_3d = ggml_cont(model.ctx, tensor_3d);
     tensor_3d =  ggml_concat(model.ctx, base_image_feature, tensor_3d, 2);
     struct ggml_cgraph* gf = ggml_new_graph(model.ctx);
     ggml_build_forward_expand(gf, tensor_3d);
     ggml_graph_compute_with_ctx(model.ctx, gf, 1);
+
     struct ggml_tensor* result = gf->nodes[gf->n_nodes - 1];
+    print_tensor(result, "result after vit", 1);
+
+
+    // {
+    //     printf((" =========================     DEBUG  =========================\n"));
+    //     printf("Load pre-computed image embeddings and attention_mask\n");
+    //     std::string      filename = "/export/share/yutong/receipt_5patches_vision_features.gguf";
+    //     tensor_from_gguf tensor;
+    //     bool             is_successful = load_tensor_from_file(filename.c_str(), tensor);
+    //     if (!is_successful)
+    //     {
+    //         fprintf(stderr, "%s: load_tensor_from_file() failed\n", __func__);
+    //         return 1;
+    //     }
+    //     result = tensor.data;
+    //     print_tensor(result, "load from pytorch", 1);
+    //     // exit(1);
+    //     // free(result);
+    // }
 
     struct
     {
@@ -391,7 +559,7 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image
         scale_factor = (float)current_height / (float)original_height;
         int new_width = int(original_width * scale_factor);
         int padding = (current_width - new_width) / 2;
-        printf("new_width: %d, padding: %d\n", new_width, padding);
+        // printf("new_width: %d, padding: %d\n", new_width, padding);
         for (int i = 0; i < current_height; i++){
             for (int j = 0; j < current_width; j++){
                 if (j < padding || j >= current_width - padding)
@@ -418,6 +586,8 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image
     ggml_graph_compute_with_ctx(mask.ctx, gf, 1);
     attention_mask = gf->nodes[gf->n_nodes - 1];
     // memcpy(image_embd_v_m_mask_out, (float *)attention_mask->data, ggml_nbytes(attention_mask));
+
+    
 
     // compute attnetion masks outside of the graph
     struct ggml_tensor * attn_bias_input;
