@@ -602,6 +602,141 @@ struct clip_ctx {
     struct clip_image_size * load_image_size;
 };
 
+
+void print_tensor(ggml_tensor *tensor, const char *name = "", int verbosity = 0)
+{
+    if (tensor->ne[2] == 1)
+    {
+        printf("---> %s: (%ld, %ld)\n", name, tensor->ne[0], tensor->ne[1]);
+    }
+    else if (ggml_is_3d(tensor))
+    {
+        printf("---> %s: (%ld, %ld, %ld)\n", name, tensor->ne[0], tensor->ne[1], tensor->ne[2]);
+    }
+    else
+    {
+        printf("---> %s: (%ld, %ld, %ld, %ld)\n", name, tensor->ne[0], tensor->ne[1], tensor->ne[2], tensor->ne[3]);
+    }
+    if (verbosity == 1)
+    {
+        printf("*********************************************************************\n");
+        if (tensor->ne[2] == 1)
+        {
+            const float *mat = (float *)tensor->data;
+            int          dim0 = tensor->ne[1];
+            int          dim1 = tensor->ne[0];
+            if (dim0 < 6 && dim1 < 6)
+            {
+                for (int i = 0; i < dim0; i++)
+                {
+                    for (int j = 0; j < dim1; j++)
+                    {
+                        printf("%+.4f ", mat[i * dim1 + j]);
+                    }
+                    printf("\n");
+                }
+                printf("\n");
+            }
+            else
+            {
+                for (int i = 0; i < std::min(dim0, 3); i++)
+                {
+                    for (int j = 0; j < std::min(dim1, 3); j++)
+                    {
+                        printf("%+.6f ", mat[i * dim1 + j]);
+                    }
+                    printf("... ");
+                    for (int j = dim1 - 3; j < dim1; j++)
+                    {
+                        printf("%+.6f ", mat[i * dim1 + j]);
+                    }
+                    printf("\n");
+                }
+                if (dim0 > 3)
+                {
+                    printf("...................... omit ......................\n");
+                    for (int i = dim0 - 3; i < dim0; i++)
+                    {
+                        for (int j = 0; j < std::min(dim1, 3); j++)
+                        {
+                            printf("%+.6f ", mat[i * dim1 + j]);
+                        }
+                        printf("... ");
+                        for (int j = dim1 - 3; j < dim1; j++)
+                        {
+                            printf("%+.6f ", mat[i * dim1 + j]);
+                        }
+                        printf("\n");
+                    }
+                }
+            }
+        }
+        else if (ggml_is_3d(tensor))
+        {
+            const float *data = (float *)tensor->data;
+            int          dim0 = tensor->ne[2];
+            int          dim1 = tensor->ne[1];
+            int          dim2 = tensor->ne[0];
+            if (dim0 < 6 && dim1 < 6 && dim2 < 6)
+            {
+                for (int i = 0; i < dim0; i++)
+                {
+                    printf("dim0 = %d\n", i);
+                    for (int j = 0; j < dim1; j++)
+                    {
+                        for (int k = 0; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("\n");
+                }
+                printf("\n");
+            }
+            else
+            {
+                for (int i = 0; i < std::min(dim0, 3); i++)
+                {
+                    printf("dim0 = %d\n", i);
+                    for (int j = 0; j < std::min(dim1, 3); j++)
+                    {
+                        for (int k = 0; k < std::min(dim2, 3); k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("... ");
+                        for (int k = dim2 - 3; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("........................\n");
+                    for (int j = dim1 - 3; j < dim1; j++)
+                    {
+                        for (int k = 0; k < std::min(dim2, 3); k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("... ");
+                        for (int k = dim2 - 3; k < dim2; k++)
+                        {
+                            printf("%+.6f ", data[i * dim1 * dim2 + j * dim2 + k]);
+                        }
+                        printf("\n");
+                    }
+                    printf("---------------------------------------------------\n");
+                }
+                printf("\n");
+            }
+        }
+    }
+    printf("*********************************************************************\n");
+    printf("\n");
+}
+
+
 static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs, struct clip_image_size * load_image_size, bool is_inf = false, ggml_tensor *attn_bias_input = nullptr) {
     if (!ctx->has_vision_encoder) {
         LOG_TEE("This gguf file seems to have no vision encoder\n");
@@ -1076,6 +1211,7 @@ static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image
         /*.mem_buffer =*/ ctx->buf_compute_meta.data(),
         /*.no_alloc   =*/ true,
     };
+    ggml_tensor *ans; // CT: used for debugging
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph * gf = ggml_new_graph(ctx0);
     struct ggml_tensor * inp_raw = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, image_size_width, image_size_height, 3, batch_size);
@@ -1089,28 +1225,30 @@ static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image
         // inp = ggml_add(ctx0, inp, ggml_repeat(ctx0, model.patch_bias, inp));
         inp = ggml_add(ctx0, inp, model.patch_bias);
     }
+
     struct ggml_tensor * embeddings = inp;
     struct ggml_tensor * pos_embed = nullptr;
 
     struct ggml_tensor * positions = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_positions);
     ggml_set_name(positions, "positions");
     ggml_set_input(positions);
-
+    // ans = embeddings;
     embeddings =
         ggml_add(ctx0, embeddings, ggml_get_rows(ctx0, model.position_embeddings, positions));
 
-    if (ctx->has_minicpmv_projector) {
-        int pos_w = image_size_width/patch_size;
-        int pos_h = image_size_height/patch_size;
-        if (ctx->minicpmv_version == 2) {
-            pos_embed = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 4096, pos_w * pos_h, 1);
-        }
-        else if (ctx->minicpmv_version == 3) {
-            pos_embed = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 3584, pos_w * pos_h, 1);
-        }
-        ggml_set_name(pos_embed, "pos_embed");
-        ggml_set_input(pos_embed);
-    }
+    // ans = embeddings;
+    // if (ctx->has_minicpmv_projector) {
+    //     int pos_w = image_size_width/patch_size;
+    //     int pos_h = image_size_height/patch_size;
+    //     if (ctx->minicpmv_version == 2) {
+    //         pos_embed = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 4096, pos_w * pos_h, 1);
+    //     }
+    //     else if (ctx->minicpmv_version == 3) {
+    //         pos_embed = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 3584, pos_w * pos_h, 1);
+    //     }
+    //     ggml_set_name(pos_embed, "pos_embed");
+    //     ggml_set_input(pos_embed);
+    // }
     // pre-layernorm
     if (ctx->has_pre_norm) {
         embeddings = ggml_norm(ctx0, embeddings, eps);
@@ -1120,7 +1258,7 @@ static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image
     }
     // loop over layers
     n_layer += 1;
-    
+
     for (int il = 0; il < n_layer - 1; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
 
@@ -1198,6 +1336,7 @@ static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image
 
         embeddings = cur;
     }
+    
     // post-layernorm
     if (ctx->has_post_norm) {
         embeddings = ggml_norm(ctx0, embeddings, eps);
@@ -1205,10 +1344,10 @@ static ggml_cgraph * clip_image_build_graph_vit(clip_ctx * ctx, const clip_image
 
         embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.post_ln_w), model.post_ln_b);
     }
-
+    ans = embeddings;
     // build the graph
-    ggml_build_forward_expand(gf, embeddings);
-
+    // ggml_build_forward_expand(gf, embeddings);
+    ggml_build_forward_expand(gf, ans);
     ggml_free(ctx0);
 
     return gf;
@@ -3071,34 +3210,32 @@ bool clip_image_batch_encode_vit(clip_ctx * ctx, const int n_threads, const clip
                     }
                 }
             }
+            // // CT, debug, set a dummy image
+            // for (int b = 0; b < batch_size; b++) {
+            //     for (int k = 0; k < 3; k++) {
+            //         for (int y = 0; y < ny; y++) {
+            //             for (int x = 0; x < nx; x++) {
+            //                 data[(b * 3 * n) + k * n + y * nx + x] = 0.5f;  // Set each pixel value to 0.5
+            //             }
+            //         }
+            //     }
+            // }
         }
+
         ggml_backend_tensor_set(inp_raw, data, 0, ggml_nbytes(inp_raw));
         free(data);
     }
 
-    // copy from minicpm implementation for positional embedding.
-    // inspired from siglip:
-    //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit
-    //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit/blob/d66538faeba44480d0bfaa42145eef26f9423199/modeling_siglip.py#L316
+    {
+    // compute positions
     struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "positions");
     int* positions_data = (int*)malloc(ggml_nbytes(positions));
-    int bucket_coords_h[70];
-    int bucket_coords_w[70];
-    for (int i = 0; i < pos_h; i++){
-        bucket_coords_h[i] = std::floor(70.0*i/pos_h);
-    }
-    for (int i = 0; i < pos_w; i++){
-        bucket_coords_w[i] = std::floor(70.0*i/pos_w);
-    }
-    for (int i = 0, id = 0; i < pos_h; i++){
-        for (int j = 0; j < pos_w; j++){
-            positions_data[id++] = bucket_coords_h[i]*70 + bucket_coords_w[j];
-        }
+    for (int i = 0; i < num_patches; i++){
+        positions_data[i] = i;
     }
     ggml_backend_tensor_set(positions, positions_data, 0, ggml_nbytes(positions));
     free(positions_data);
-
-
+    }  
 
     if (ggml_backend_is_cpu(ctx->backend)) {
         ggml_backend_cpu_set_n_threads(ctx->backend, n_threads);
@@ -3112,6 +3249,10 @@ bool clip_image_batch_encode_vit(clip_ctx * ctx, const int n_threads, const clip
     ggml_backend_graph_compute(ctx->backend, gf);
     // the last node is the embedding tensor
     struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 1];
+
+    // print_tensor(embeddings, "befor vit", 1);
+    // exit(1);
+
     ggml_backend_tensor_get(embeddings, vec, 0, ggml_nbytes(embeddings));
     return true;
 }
