@@ -7823,6 +7823,7 @@ static bool llm_load_tensors(
                     {
                         model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), { n_embd });
                         model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), { n_embd, n_vocab });
+                        model.output_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT, "bias"), {n_vocab});
                     }
 
                     for (int i = 0; i < n_layer; ++i) {
@@ -12690,7 +12691,10 @@ struct llm_build_context {
 
         // lm_head
         cur = llm_build_lora_mm(lctx, ctx0, model.output, cur);
-        cb(cur, "result_output", -1);
+        cb(cur, "result_output_no_bias", -1);
+
+        cur = ggml_add(ctx0, cur, model.output_b);
+        cb(cur, "result_output", -1);        
 
         ggml_build_forward_expand(gf, cur);
 
