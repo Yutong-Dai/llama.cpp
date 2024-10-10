@@ -449,8 +449,6 @@ static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip, const clip_image_
         LOG_ERR("%s: failed at image tokenizer (projector step failed)\n", __func__);
         return false;
     }
-    printf("result->ne[0], result->ne[1], result->ne[2], result->ne[3]: %d, %d\n", result->ne[0], result->ne[1], result->ne[2], result->ne[3]);
-    exit(0);
     ggml_free(model.ctx);
     ggml_free(mask.ctx);
     return true;
@@ -553,13 +551,11 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         for (size_t i = 0; i < img_res_v.size; i++)
         {   
             n_img_pos_out += clip_n_patches(ctx_clip);
-            printf("n_img_pos_out: %d\n", n_img_pos_out);
             // size_t allocated_size = clip_embd_nbytes(ctx_clip);
             const int vit_patch_num = clip_image_size(ctx_clip) / clip_patch_size(ctx_clip) * (clip_image_size(ctx_clip) / clip_patch_size(ctx_clip));
             image_embd_v[i] =
                 (float *)malloc(vit_patch_num * clip_hidden_size(ctx_clip)* sizeof(float));  // If vit only, it should be 729 * 1152 * 4 = 3359232
             // FIXME:
-            printf("In xgenmm clip logic\n");
             const bool encoded = clip_image_encode_vit(ctx_clip, n_threads, &img_res_v.data[i], image_embd_v[i]);
             if (!encoded)
             {
