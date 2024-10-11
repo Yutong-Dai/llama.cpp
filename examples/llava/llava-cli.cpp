@@ -1,3 +1,5 @@
+// JT: This is not the official llava-cli.cpp for LlaVA; This is temporary code for quick testing on XgenMM.
+
 #include "arg.h"
 #include "base64.hpp"
 #include "log.h"
@@ -49,7 +51,7 @@ static const char * sample(struct gpt_sampler * smpl,
     gpt_sampler_accept(smpl, id, true);
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
-        ret = "</s>";
+        ret = "<|end|>";
     } else {
         ret = llama_token_to_piece(ctx_llama, id);
     }
@@ -71,31 +73,33 @@ static bool prompt_contains_image(const std::string& prompt) {
     return (begin != std::string::npos);
 }
 
-// replaces the base64 image tag in the prompt with `replacement`
-static llava_image_embed * llava_image_embed_make_with_prompt_base64(struct clip_ctx * ctx_clip, int n_threads, const std::string& prompt) {
-    size_t img_base64_str_start, img_base64_str_end;
-    find_image_tag_in_prompt(prompt, img_base64_str_start, img_base64_str_end);
-    if (img_base64_str_start == std::string::npos || img_base64_str_end == std::string::npos) {
-        LOG_ERR("%s: invalid base64 image tag. must be %s<base64 byte string>%s\n", __func__, IMG_BASE64_TAG_BEGIN, IMG_BASE64_TAG_END);
-        return NULL;
-    }
+// TODO: Implememt this function llava_image_embed_make_with_prompt_base64 for xgenmm
+// // replaces the base64 image tag in the prompt with `replacement`
+// static llava_image_embed * llava_image_embed_make_with_prompt_base64(struct clip_ctx * ctx_clip, int n_threads, const
+// std::string& prompt) {
+//     size_t img_base64_str_start, img_base64_str_end;
+//     find_image_tag_in_prompt(prompt, img_base64_str_start, img_base64_str_end);
+//     if (img_base64_str_start == std::string::npos || img_base64_str_end == std::string::npos) {
+//         LOG_ERR("%s: invalid base64 image tag. must be %s<base64 byte string>%s\n", __func__, IMG_BASE64_TAG_BEGIN,
+//         IMG_BASE64_TAG_END); return NULL;
+//     }
 
-    auto base64_bytes_start = img_base64_str_start + strlen(IMG_BASE64_TAG_BEGIN);
-    auto base64_bytes_count = img_base64_str_end - base64_bytes_start;
-    auto base64_str = prompt.substr(base64_bytes_start, base64_bytes_count );
+//     auto base64_bytes_start = img_base64_str_start + strlen(IMG_BASE64_TAG_BEGIN);
+//     auto base64_bytes_count = img_base64_str_end - base64_bytes_start;
+//     auto base64_str = prompt.substr(base64_bytes_start, base64_bytes_count );
 
-    auto required_bytes = base64::required_encode_size(base64_str.size());
-    auto img_bytes = std::vector<unsigned char>(required_bytes);
-    base64::decode(base64_str.begin(), base64_str.end(), img_bytes.begin());
+//     auto required_bytes = base64::required_encode_size(base64_str.size());
+//     auto img_bytes = std::vector<unsigned char>(required_bytes);
+//     base64::decode(base64_str.begin(), base64_str.end(), img_bytes.begin());
 
-    auto embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, img_bytes.data(), img_bytes.size());
-    if (!embed) {
-        LOG_ERR("%s: could not load image from base64 string.\n", __func__);
-        return NULL;
-    }
+//     auto embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, img_bytes.data(), img_bytes.size());
+//     if (!embed) {
+//         LOG_ERR("%s: could not load image from base64 string.\n", __func__);
+//         return NULL;
+//     }
 
-    return embed;
-}
+//     return embed;
+// }
 
 static std::string remove_image_from_prompt(const std::string& prompt, const char * replacement = "") {
     size_t begin, end;
@@ -126,15 +130,18 @@ static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_para
     llava_image_embed * embed = NULL;
     auto prompt = params->prompt;
     if (prompt_contains_image(prompt)) {
-        if (!params->image.empty()) {
-            LOG_INF("using base64 encoded image instead of command line image path\n");
-        }
-        embed = llava_image_embed_make_with_prompt_base64(ctx_llava->ctx_clip, params->cpuparams.n_threads, prompt);
-        if (!embed) {
-            LOG_ERR("%s: can't load image from prompt\n", __func__);
-            return NULL;
-        }
-        params->prompt = remove_image_from_prompt(prompt);
+        // if (!params->image.empty()) {
+        //     LOG_INF("using base64 encoded image instead of command line image path\n");
+        // }
+        // embed = llava_image_embed_make_with_prompt_base64(ctx_llava->ctx_clip, params->cpuparams.n_threads, prompt);
+        // if (!embed) {
+        //     LOG_ERR("%s: can't load image from prompt\n", __func__);
+        //     return NULL;
+        // }
+        // params->prompt = remove_image_from_prompt(prompt);
+        // TODO: Implement this function llava_image_embed_make_with_prompt_base64 for xgenmm
+        printf("not implemented\n");
+        exit(1);
     } else {
         embed = llava_image_embed_make_with_filename(ctx_llava->ctx_clip, params->cpuparams.n_threads, fname.c_str());
         if (!embed) {
@@ -201,6 +208,11 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
     for (int i = 0; i < max_tgt_len; i++) {
         const char * tmp = sample(smpl, ctx_llava->ctx_llama, &n_past);
         response += tmp;
+        if (strcmp(tmp, "<|end|>") == 0)
+        {
+            break;
+        }
+
         if (strcmp(tmp, "</s>") == 0) break;
         if (strstr(tmp, "###")) break; // Yi-VL behavior
         LOG("%s", tmp);
@@ -306,12 +318,15 @@ int main(int argc, char ** argv) {
     } else {
         for (auto & image : params.image) {
             auto * ctx_llava = llava_init_context(&params, model);
-
+            // FIXME: Remove
+            printf("Before load_image\n");
             auto * image_embed = load_image(ctx_llava, &params, image);
             if (!image_embed) {
                 LOG_ERR("%s: failed to load image %s. Terminating\n\n", __func__, image.c_str());
                 return 1;
             }
+            // FIXME: Remove
+            printf("After load_image\n");
 
             // process the prompt
             process_prompt(ctx_llava, image_embed, &params, params.prompt);

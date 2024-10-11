@@ -1,3 +1,5 @@
+// JT: This is not the official clip.h for LlaVA; This is temporary code for quick testing on XgenMM.
+
 #ifndef CLIP_H
 #define CLIP_H
 
@@ -87,6 +89,12 @@ CLIP_API bool clip_model_quantize(const char * fname_inp, const char * fname_out
 
 CLIP_API int clip_is_minicpmv(const struct clip_ctx * ctx);
 
+CLIP_API bool clip_image_encode_tokenizer(struct clip_ctx *ctx, int batch_size, ggml_tensor *img_embeddings,
+                                          ggml_tensor *attn_bias_input, float *image_embd);
+CLIP_API int clip_is_xgenmm(const struct clip_ctx * ctx);
+CLIP_API bool clip_image_encode_vit(struct clip_ctx *ctx, int n_threads, struct clip_image_f32 *img, float *vec);
+CLIP_API bool clip_image_batch_encode_vit(struct clip_ctx *ctx, int n_threads, const struct clip_image_f32_batch *imgs,
+                                          float *vec);
 #ifdef __cplusplus
 }
 #endif
