@@ -1,4 +1,5 @@
 # LLaVA
+# NOTE: This branch is a hacked version for temporarily testing minicpmv with llava command
 
 Currently this implementation supports [llava-v1.5](https://huggingface.co/liuhaotian/llava-v1.5-7b) variants,
 as well as llava-1.6 [llava-v1.6](https://huggingface.co/collections/liuhaotian/llava-16-65b9e40155f60fd046a5ccf2) variants.
