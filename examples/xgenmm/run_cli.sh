@@ -35,14 +35,14 @@ make xgenmm-cli
 #     --seed 42 --ctx-size 4096 --predict 1024 \
 #     --temp 0 --verbose-prompt
 
-Q="What is the address of this restaurant?"
+# Q="What is the address of this restaurant?"
 # Q="Is this dine in or dine out receipt?"
 # Q="What is the total amount paid?"
 # Q="What is card holder's name?"
 # Q="What is the transaction date?"
 # Q="What is the phone number of this restaurant?"
 # Q="Who is the attendant?"
-# Q="Who is the cashier?"
+Q="Who is the cashier?"
 # Q="Briefly describe this image."
 prompt="<|system|>\nA chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.<|end|>\n<|user|>\n<image>\n $Q<|end|>\n<|assistant|>\n"
 echo $prompt
@@ -53,9 +53,10 @@ echo $prompt
 # mmproj=$base_path/mmproj-model-f32.gguf
 
 base_path=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct_bf16_patch128/gguf
+# base_path=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct_pre_V3_6-v3.8.0/gguf
 # model=$base_path/phi3_mini_4k_instruct_f16.gguf
 model=$base_path/phi3_mini_4k_instruct_f16_Q4_K_M.gguf
-mmproj=$base_path/mmproj-model-f32.gguf
+mmproj=$base_path/mmproj-model-f16.gguf
 
 ./xgenmm-cli --model $model\
     --mmproj $mmproj \
@@ -63,3 +64,6 @@ mmproj=$base_path/mmproj-model-f32.gguf
     --prompt "$prompt" \
     --seed 42 --ctx-size 4096 --predict 1024 \
     --temp 0.0 --verbose-prompt --color --ubatch-size 1280
+
+
+# ./bin/llama-minicpmv-cli -m /export/share/yutong/xgenmm/llamacpp_wd/minicpm26/ggml-model-Q4_K_M.gguf --mmproj /export/share/yutong/xgenmm/llamacpp_wd/minicpm26/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 --image /export/home/llama.cpp/examples/xgenmm/imgs/receipt.jpg -p "What is the address of this restaurant?"    

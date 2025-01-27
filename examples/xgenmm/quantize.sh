@@ -1,4 +1,5 @@
-gguf_dir=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct_bf16_patch128/gguf
+# gguf_dir=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct_bf16_patch128/gguf
+gguf_dir=/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct_pre_V3_6-v3.8.0/gguf
 model_name=phi3_mini_4k_instruct_f16
 quantize_method=Q4_K_M
 

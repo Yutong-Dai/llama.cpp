@@ -77,6 +77,9 @@ if __name__ == "__main__":
 
     print("🟡 Peforming the surgery...")
     
+    # model.lang_model.model.embed_tokens.weight is 32064 * 3072
+    model.lang_model.config.vocab_size = 32064 # overwrite the vocab size
+    print("❗ orgirnal vocab size is 32015, the cloest vocab size that divisible to 64 is 32064, phi3 padded to 32064")
     model.lang_model.save_pretrained(f"{save_dir}/llm")    
     
     model.vision_encoder.config.save_pretrained(f"{save_dir}/vision_encoder")
@@ -93,7 +96,7 @@ if __name__ == "__main__":
     
     # put the tokenizer in the same dir as the lang model
     tokenizer.save_pretrained(f"{save_dir}/llm")
-    print("❗❗❗ Please also download tokenizer.json mannually from https://huggingface.co/Salesforce/xgen-mm-phi3-mini-instruct-interleave-r-v1.5/resolve/main/tokenizer.json and put it in the same dir as the lang model.")
+    # print("❗❗❗ Please also download tokenizer.json mannually from https://huggingface.co/Salesforce/xgen-mm-phi3-mini-instruct-interleave-r-v1.5/resolve/main/tokenizer.json and put it in the same dir as the lang model.")
     
     end = time.time()
     print(f"🟢 time used: [{end-start:.3f} s]")

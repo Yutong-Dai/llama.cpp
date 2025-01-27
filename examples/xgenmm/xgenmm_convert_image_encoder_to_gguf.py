@@ -353,26 +353,43 @@ if __name__ == "__main__":
                 ftype = 0
             else:
                 ftype = 1
-            ftype_cur = ftype
+            ftype_cur = 0
             for name, tensor in projector.items():
                 tensor = tensor.squeeze().numpy()
-                if ftype_cur == 1:
-                    if 'ln.bias' in name or 'ln.weight' in name:
-                        tensor = tensor.astype(np.float32)
-                        ftype_cur = 0
-                        print(f'❗ {name} is set to np.float32')
-                    else:
-                        tensor = tensor.astype(np.float16)
+                name = get_tensor_name(name)
+                n_dims = len(tensor.shape)
+                # if ftype == 1:
+                #     if 'ln.bias' in name or 'ln.weight' in name:
+                #         tensor = tensor.astype(np.float32)
+                #         ftype_cur = 0
+                #         print(f'❗ {name} is set to np.float32')
+                #     else:
+                #         tensor = tensor.astype(np.float16)
+                #         ftype_cur = 1
+                #         print(f'❗ {name} is set to np.float16')
+                # else:
+                #     if tensor.dtype != np.float32:
+                #         tensor = tensor.astype(np.float32)
+                #         print(f'❗ {name} is set to np.float32')
+                #         ftype_cur = 0
+                
+                if ftype == 1:
+                    if name[-7:] == ".weight" and n_dims == 2:
+                        print("  Converting to float16")
+                        data = data.astype(np.float16)
                         ftype_cur = 1
-                        print(f'❗ {name} is set to np.float16')
-                else:
-                    if tensor.dtype != np.float32:
-                        tensor = tensor.astype(np.float32)
-                        print(f'❗ {name} is set to np.float32')
+                    else:
+                        print("  Converting to float32")
+                        data = data.astype(np.float32)
                         ftype_cur = 0
-
-                print(f"{name} - {ftype_str[ftype_cur]} - shape = {tensor.shape}")
+                else:
+                    if data.dtype != np.float32:
+                        print("  Converting to float32")
+                        data = data.astype(np.float32)
+                        ftype_cur = 0                
                 fout.add_tensor(name, tensor)
+                print(f"{name} - {ftype_str[ftype_cur]} - shape = {tensor.shape}")
+                
             print("🟢 Projector tensors added\n")
     
     with print_time("write to gguf file"):
